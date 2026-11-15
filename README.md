@@ -64,13 +64,31 @@ int main() {
 | `read_json` | `template <typename T> inline auto read_json(T& val, std::string_view buffer)` | Deserializes JSON string into target C++ struct or value. |
 | `parse_json` | `template <typename T = Json> inline std::expected<T, std::string> parse_json(std::string_view buffer)` | Parses JSON string into newly constructed value of type `T` inside `std::expected`. |
 
-## Build & Test
+## Install
 
-This folder owns its header, `test.cpp`, CMake target/config, manifest, port recipe and licenses. See the [integration guide](../../README.md#integration-vcpkg--cmakeninja).
+Add `bdombro/slimr-json` to `vcpkg-configuration.json`:
 
-```bash
-just test-pkg json  # From the repository root; automatic native deps + ASan/UBSan
-just build         # All optimized Release suites
+```json
+{
+  "kind": "git",
+  "repository": "https://github.com/bdombro/slimr-json",
+  "baseline": "<commit-sha>",
+  "packages": [
+    "slimr-json"
+  ]
+}
 ```
 
-Generated output stays under root `build/deps/` and `build/cmake/{Debug,Release}/`. Consumers link `slimr::json` from `find_package(slimr-json CONFIG REQUIRED)`. The optional manifest `tests` feature keeps test dependencies out of production consumption.
+Declare `slimr-json` in `vcpkg.json` and link `slimr::json` in `CMakeLists.txt`:
+
+```cmake
+find_package(slimr-json CONFIG REQUIRED)
+target_link_libraries(my_target PRIVATE slimr::json)
+```
+
+## Build & Test
+
+```bash
+just test   # Debug build (ASan + UBSan) and run tests
+just build  # Optimized Release build
+```
