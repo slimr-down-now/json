@@ -1,4 +1,4 @@
-# slimr::json (`packages/json`)
+# slimr::json
 
 Fast, lightweight C++26 JSON library built on top of [Glaze](https://github.com/stephenberry/glaze) with precise 64-bit integer generic trees, `std::expected` parsing, and safe object/array constructors.
 
@@ -11,7 +11,27 @@ Borrowed directly from the design of [`@slimr/json`](https://www.npmjs.com/packa
 - **Ambiguity-free Helpers:** Provides `json_obj()` and `json_arr()` helper functions to prevent initializer-list ambiguity when constructing dynamic JSON trees.
 - **Zero-overhead Glaze Foundation:** Direct inline wrappers around Glaze serialization and deserialization templates for maximum performance.
 
----
+## Install
+
+Add `bdombro/slimr-json` to `vcpkg-configuration.json`:
+
+```json
+{
+  "kind": "git",
+  "repository": "https://github.com/bdombro/slimr-json",
+  "baseline": "<commit-sha>",
+  "packages": [
+    "slimr-json"
+  ]
+}
+```
+
+Declare `slimr-json` in `vcpkg.json` and link `slimr::json` in `CMakeLists.txt`:
+
+```cmake
+find_package(slimr-json CONFIG REQUIRED)
+target_link_libraries(my_target PRIVATE slimr::json)
+```
 
 ## Quick Start
 
@@ -64,31 +84,12 @@ int main() {
 | `read_json` | `template <typename T> inline auto read_json(T& val, std::string_view buffer)` | Deserializes JSON string into target C++ struct or value. |
 | `parse_json` | `template <typename T = Json> inline std::expected<T, std::string> parse_json(std::string_view buffer)` | Parses JSON string into newly constructed value of type `T` inside `std::expected`. |
 
-## Install
+## Environment Variables
 
-Add `bdombro/slimr-json` to `vcpkg-configuration.json`:
+| Name | Required | Purpose |
+| --- | --- | --- |
+| *(none)* | — | — |
 
-```json
-{
-  "kind": "git",
-  "repository": "https://github.com/bdombro/slimr-json",
-  "baseline": "<commit-sha>",
-  "packages": [
-    "slimr-json"
-  ]
-}
-```
+## Development
 
-Declare `slimr-json` in `vcpkg.json` and link `slimr::json` in `CMakeLists.txt`:
-
-```cmake
-find_package(slimr-json CONFIG REQUIRED)
-target_link_libraries(my_target PRIVATE slimr::json)
-```
-
-## Build & Test
-
-```bash
-just test   # Debug build (ASan + UBSan) and run tests
-just build  # Optimized Release build
-```
+See [docs/development.md](docs/development.md) for building, testing, linting, and releasing.
