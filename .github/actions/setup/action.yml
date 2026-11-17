@@ -23,6 +23,37 @@ runs:
           echo "HOMEBREW_REPOSITORY=$HOMEBREW_REPOSITORY"
         } >> "$GITHUB_ENV"
 
+    - name: Resolve cache key inputs
+      id: env
+      shell: bash
+      run: |
+        arch_name="$(uname -m)"
+        case "$arch_name" in
+          arm64|aarch64) arch_part="arm64" ;;
+          x86_64|amd64) arch_part="x64" ;;
+          *) echo "::error::Unsupported arch: $arch_name"; exit 1 ;;
+        esac
+        if [ "${{ runner.os }}" = "macOS" ]; then
+          triplet="${arch_part}-osx"
+        else
+          triplet="${arch_part}-linux"
+        fi
+        cxx="$(brew --prefix llvm@23)/bin/clang++"
+        compiler="clang-$("$cxx" --version | sed -n 's/.*version \([^ ]*\).*/\1/p')"
+        if [ -z "$compiler" ] || [ "$compiler" = "clang-" ]; then
+          echo "::error::Failed to parse clang++ version from $cxx"
+          exit 1
+        fi
+        triplets_glob="triplets/*.cmake"
+        if [ ! -d triplets ] && [ -d mcp/triplets ]; then
+          triplets_glob="mcp/triplets/*.cmake"
+        fi
+        {
+          echo "triplet=$triplet"
+          echo "compiler=$compiler"
+          echo "triplets_glob=$triplets_glob"
+        } >> "$GITHUB_OUTPUT"
+
     - name: Read vcpkg baseline
       id: vcpkg-ref
       shell: bash
@@ -81,11 +112,21 @@ runs:
         } >> "$GITHUB_ENV"
 
     - name: Cache vcpkg binaries
+      id: vcpkg-cache
       if: steps.vcpkg-ref.outputs.baseline != ''
       uses: actions/cache@v4
       with:
         path: ${{ runner.temp }}/vcpkg-cache
-        key: vcpkg-${{ runner.os }}-${{ runner.arch }}-${{ steps.vcpkg-ref.outputs.baseline }}-${{ hashFiles(steps.vcpkg-ref.outputs.vcpkg_glob, 'ports/*/vcpkg.json') }}
+        key: vcpkg-${{ runner.os }}-${{ steps.env.outputs.triplet }}-${{ steps.env.outputs.compiler }}-${{ steps.vcpkg-ref.outputs.baseline }}-${{ hashFiles(steps.vcpkg-ref.outputs.vcpkg_glob, 'ports/*/vcpkg.json', steps.env.outputs.triplets_glob) }}
         restore-keys: |
-          vcpkg-${{ runner.os }}-${{ runner.arch }}-${{ steps.vcpkg-ref.outputs.baseline }}-
-          vcpkg-${{ runner.os }}-${{ runner.arch }}-
+          vcpkg-${{ runner.os }}-${{ steps.env.outputs.triplet }}-${{ steps.env.outputs.compiler }}-${{ steps.vcpkg-ref.outputs.baseline }}-
+          vcpkg-${{ runner.os }}-${{ steps.env.outputs.triplet }}-${{ steps.env.outputs.compiler }}-
+
+    - name: Report vcpkg cache status
+      if: steps.vcpkg-ref.outputs.baseline != ''
+      shell: bash
+      run: |
+        echo "cache-hit=${{ steps.vcpkg-cache.outputs.cache-hit }}"
+        echo "triplet=${{ steps.env.outputs.triplet }}"
+        echo "compiler=${{ steps.env.outputs.compiler }}"
+        echo "baseline=${{ steps.vcpkg-ref.outputs.baseline }}"

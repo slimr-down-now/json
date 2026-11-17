@@ -1,27 +1,75 @@
 name: test
-on: [workflow_dispatch, workflow_call, pull_request]
+on:
+  workflow_dispatch:
+  workflow_call:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
 jobs:
-  platforms:
+  gate:
     runs-on: ubuntu-24.04
     outputs:
-      runners: ${{ steps.p.outputs.runners }}
+      run_tests: ${{ steps.classify.outputs.run_tests }}
+      runners: ${{ steps.platforms.outputs.runners || '[]' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: classify
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "run_tests=true" >> "$GITHUB_OUTPUT"
+            echo "Event ${{ github.event_name }}: running tests."
+            exit 0
+          fi
+          base_ref="${{ github.base_ref }}"
+          git fetch origin "$base_ref" --depth=1 || true
+          mapfile -t changed < <(git diff --name-only "origin/${base_ref}...HEAD")
+          if [ "${#changed[@]}" -eq 0 ]; then
+            echo "run_tests=true" >> "$GITHUB_OUTPUT"
+            echo "No changed files detected; running tests."
+            exit 0
+          fi
+          docs_only=true
+          for f in "${changed[@]}"; do
+            case "$f" in
+              README.md|AGENTS.md|*/AGENTS.md|CHANGELOG.md|LICENSE|docs/contributing.md|mcp/docs/contributing.md|docs/architecture.md|docs/development.md|client/docs/development.md|.vscode/*|.clangd|.gitignore|.git-blame-ignore-revs|.clang-format-ignore)
+                ;;
+              *)
+                docs_only=false
+                echo "Code/build file changed: $f"
+                ;;
+            esac
+          done
+          if [ "$docs_only" = true ]; then
+            echo "run_tests=false" >> "$GITHUB_OUTPUT"
+            echo "Docs-only PR: skipping build/test jobs."
+          else
+            echo "run_tests=true" >> "$GITHUB_OUTPUT"
+            echo "Code PR: running build/test jobs."
+          fi
       - uses: extractions/setup-just@v3
-      - id: p
+        if: steps.classify.outputs.run_tests == 'true'
+      - id: platforms
+        if: steps.classify.outputs.run_tests == 'true'
         run: |
           runners="$(just --evaluate platforms | jq -Rc 'split(" ") | map(select(length > 0) | {macos: "macos-26", linux: "ubuntu-24.04"}[.] // error("unknown platform: \(.)"))')"
           echo "runners=$runners" >> "$GITHUB_OUTPUT"
 
   test:
-    needs: platforms
+    needs: gate
+    if: needs.gate.outputs.run_tests == 'true'
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJSON(needs.platforms.outputs.runners) }}
+        os: ${{ fromJSON(needs.gate.outputs.runners) }}
     runs-on: ${{ matrix.os }}
     env:
       BUGSINK_DSN: ""
@@ -32,3 +80,17 @@ jobs:
       - run: just lint
       - if: hashFiles('scripts/test-mcp.ts') != ''
         run: just test-mcp
+
+  ci:
+    if: always()
+    needs: [gate, test]
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          echo "gate=${{ needs.gate.result }} test=${{ needs.test.result }}"
+          if [ "${{ needs.gate.result }}" != "success" ]; then
+            exit 1
+          fi
+          if [ "${{ needs.test.result }}" != "success" ] && [ "${{ needs.test.result }}" != "skipped" ]; then
+            exit 1
+          fi
