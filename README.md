@@ -84,6 +84,20 @@ int main() {
 | `read_json` | `template <typename T> inline auto read_json(T& val, std::string_view buffer)` | Deserializes JSON string into target C++ struct or value. |
 | `parse_json` | `template <typename T = Json> inline std::expected<T, std::string> parse_json(std::string_view buffer)` | Parses JSON string into newly constructed value of type `T` inside `std::expected`. |
 
+## Develop against an unreleased lib
+
+Add `"overlay-ports"` to the consumer's `vcpkg-configuration.json`, then run `just test` or `just build` as usual (add one entry per unreleased lib):
+
+```json
+{
+  "overlay-ports": [
+    "<relative path to ~/dev/slimr/<name>/ports/slimr-<name>>"
+  ]
+}
+```
+
+Remove `"overlay-ports"` and bump the registry baseline once the lib is released. Never commit or release with `overlay-ports` set.
+
 ## Environment Variables
 
 | Name | Required | Purpose |
