@@ -3,6 +3,7 @@
 #include "test.hpp"
 #include <vector>
 
+// spike: trigger warm-cache CI run
 using namespace slimr;
 
 TEST_SUITE("slimr::json") {
